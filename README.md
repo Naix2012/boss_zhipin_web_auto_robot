@@ -11,8 +11,11 @@ pip install selenium pypinyin
 修改auto_resume_submission_script_for_boss.py里上面的职务需求等自定义信息
 
 # 启动流程
+
 先打开chrome_open.bat，自己进入boss网站把账户登录一下，
+
 然后就可以运行auto_resume_submission_script_for_boss.py了，
+
 可能会偶尔有点小问题，还在调试中，脚本卡住或者报错就关了重新跑一下，可以把报错提到issue里
 
 萌新的第一个完整功能的脚本，总之姑且能跑(
