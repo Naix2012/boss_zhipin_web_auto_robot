@@ -1,0 +1,2 @@
+# auto_resume_submission_script_for_boss
+boss自动投递简历的python脚本
