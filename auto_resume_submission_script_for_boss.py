@@ -124,20 +124,6 @@ def xpath_wait_longer(XPATH_in, timeout=6,type_in='located'): #循环等待元�
         else:
             continue
 
-if city_choice in hot_city_list:
-    city = get_hotcitycodes_dict(city_choice)
-else:
-    city = get_allcitycodes_dict(city_choice)
-query = parse.quote(job_n)
-
-driver = chrome_setup()
-driver.get(f'https://www.zhipin.com/web/geek/job?query={query}&city={city}&salary={sal}')
-print('开始获取职位信息')
-xpath_wait_longer('//div[@class="search-job-result"]')
-
-list = driver.find_elements(By.XPATH, '//div[@class="info-public"]')    #获取职位
-
-
 def company_black_list(company_name,company_black_list_fr=company_black_list_fr):   #公司黑名单
     for i in company_black_list_fr: #判断公司是否在黑名单中
         if i in company_name:
@@ -183,8 +169,23 @@ def handles_check(previous_window_count):   #误点击打开新页面解决方�
     else:
         return False
 
+if city_choice in hot_city_list:
+    city = get_hotcitycodes_dict(city_choice)
+else:
+    city = get_allcitycodes_dict(city_choice)
+query = parse.quote(job_n)
+
+driver = chrome_setup()
+driver.get(f'https://www.zhipin.com/web/geek/job?query={query}&city={city}&salary={sal}')
+print('开始获取职位信息')
+xpath_wait_longer('//div[@class="search-job-result"]')
+
+list = driver.find_elements(By.XPATH, '//div[@class="info-public"]')    #获取职位
+
+
 count_num = 0
 count_company = 0
+page_count = 1
 
 while count_num < 101:  #每天投递上限100个
     for i in range(1,31):  #遍历点击职位列表
@@ -204,8 +205,8 @@ while count_num < 101:  #每天投递上限100个
 
             try_count = 0
             while True: #由于模拟鼠标的不稳定性，读取职务详细信息将进行多次尝试
-                if try_count > 6:
-                    print('尝试次数过6,退出info查找,跳过此职务')
+                if try_count > 5:
+                    print('尝试次数过5,退出info查找,跳过此职务')
                     break
                 try_count += 1
                 scroll_to_element(driver, f'//li[@ka="search_list_{count_company}"]')
@@ -214,7 +215,7 @@ while count_num < 101:  #每天投递上限100个
                     break  # 如果成功找到元素,跳出循环
                 else:
                     continue
-            if try_count > 6:
+            if try_count > 5:
                 continue
 
             job_detail = driver.find_element(By.XPATH, '//div[@class="job-detail-card"]')   #读取职位详细信息
@@ -230,8 +231,8 @@ while count_num < 101:  #每天投递上限100个
             else:
                 error = 0
                 while True: #可点击元素在模拟鼠标悬停时会变化，由于模拟鼠标的不稳定性将进行多次尝试
-                    if error > 6:
-                        print('超过6次按钮错误,此次投递不计算,跳过')
+                    if error > 5:
+                        print('超过5次按钮错误,此次投递不计算,跳过')
                         break
                     try:
                         scroll_to_element(driver, f"//li[@ka='search_list_{count_company}']/div[1]/a/div[2]/div")
@@ -268,7 +269,7 @@ while count_num < 101:  #每天投递上限100个
                             print('click_error_two={0}'.format(e))
                             error += 1
                             continue
-                if error > 6:
+                if error > 5:
                     continue
                 else:
                     count_num += 1
@@ -279,21 +280,40 @@ while count_num < 101:  #每天投递上限100个
                     guanbitanchuang.click()
     
                 xpath_wait_longer('//div[@class="info-public"]')
-
-    while True: #翻页功能实现，有时不稳定
-        try:
-            if xpath_wait('//i[@class="ui-icon-arrow-right"]'):
-                next_page = driver.find_element(By.XPATH, '//i[@class="ui-icon-arrow-right"]')    #点击下一页
-                next_page.click()
-                xpath_wait_longer(f'//a[@ka="search_list_company_{count_company+1}_custompage"]')
-                break
-            else:
-                scroll_to_element(driver, '//i[@class="ui-icon-arrow-right"]')
+    if page_count < 10 :
+        while True: #翻页功能实现，有时不稳定
+            try:
+                if xpath_wait('//i[@class="ui-icon-arrow-right"]', timeout=10,type_in='clickable'):
+                    next_page = driver.find_element(By.XPATH, '//i[@class="ui-icon-arrow-right"]')    #点击下一页
+                    next_page.click()
+                    test_count = 0
+                    while True:
+                        if xpath_wait(f'//a[@ka="search_list_company_{count_company+1}_custompage"]',30):
+                            page_count += 1
+                            print('翻到第{0}页'.format(page_count))
+                            break
+                        else:
+                            test_count += 1
+                            scroll_to_element(driver, '//i[@class="ui-icon-arrow-right"]')
+                            next_page = driver.find_element(By.XPATH, '//i[@class="ui-icon-arrow-right"]')
+                            print('翻页失败，正在尝试第{0}次，次数过多可手动重新运行'.format(test_count))
+                            next_page.click()
+                    break
+                else:
+                    scroll_to_element(driver, '//i[@class="ui-icon-arrow-right"]')
+                    continue
+            except Exception as e:
+                print('next_page_error={0}'.format(e))
+                driver.execute_script("window.scrollTo(document.body.scrollWidth, 0);")
                 continue
-        except Exception as e:
-            print('next_page_error={0}'.format(e))
-            driver.execute_script("window.scrollTo(document.body.scrollWidth, 0);")
-            continue
+    else:
+        driver.get(f'https://www.zhipin.com/web/geek/job?query={query}&city={city}&salary={sal}')
+        print('从第一页开始获取职位信息')
+        xpath_wait_longer('//div[@class="search-job-result"]')
+
+        list = driver.find_elements(By.XPATH, '//div[@class="info-public"]') 
+        count_company = 0
+        page_count = 1
 
 
 all_end_time = time.time()
