@@ -33,6 +33,7 @@ import random
 from urllib import parse
 import json
 from pypinyin import lazy_pinyin
+import sys
 
 
 #=====================主要代码=====================
@@ -113,16 +114,56 @@ def xpath_wait(XPATH_in, timeout=6,type_in='located'):  #等待元素加载完�
 def xpath_wait_longer(XPATH_in, timeout=6,type_in='located'): #循环等待元素加载完成
     start_time = time.time()
     loop_count = 0
-    while True:
-        loop_count += 1
-        print(f"循环等待第{loop_count}次")
-        if xpath_wait(XPATH_in, timeout,type_in=type_in):
-            end_time = time.time()
-            elapsed_time = (end_time - start_time) * 1000  # 计算运行时间（毫秒）
-            print(f"循环等待完成，共循环{loop_count}次，{XPATH_in}代码运行了{elapsed_time:.2f}毫秒")
-            break
-        else:
-            continue
+    if XPATH_in != '//a[@class="default-btn cancel-btn"]':
+        while True:
+            loop_count += 1
+            print(f"循环等待第{loop_count}次")
+            if xpath_wait(XPATH_in, timeout,type_in=type_in):
+                end_time = time.time()
+                elapsed_time = (end_time - start_time) * 1000  # 计算运行时间（毫秒）
+                print(f"循环等待完成，共循环{loop_count}次，{XPATH_in}代码运行了{elapsed_time:.2f}毫秒")
+                break
+            else:
+                continue
+    else:
+        while True:
+            loop_count += 1
+            print(f"循环等待第{loop_count}次")
+            if loop_count < 3:
+                if xpath_wait(XPATH_in, timeout,type_in=type_in):
+                    end_time = time.time()
+                    elapsed_time = (end_time - start_time) * 1000  # 计算运行时间（毫秒）
+                    print(f"循环等待完成，共循环{loop_count}次，{XPATH_in}代码运行了{elapsed_time:.2f}毫秒")
+                    break
+                else:
+                    continue
+            else:
+                if xpath_wait('//a[@class="default-btn sure-btn"]', timeout,type_in='clickable'):
+                    if driver.find_element(By.XPATH, '//div[@class="chat-block-header"]/h3').text == '无法进行沟通':
+                        print('投递已达上限，程序结束')
+                        sys.exit()
+                    window_count = len(driver.window_handles)
+                    click = driver.find_element(By.XPATH, '//a[@class="default-btn sure-btn"]')
+                    click.click
+                    while True:
+                        if handles_check(window_count):
+                            print('已关闭个人中心窗口')
+                            break
+                        else:
+                            print('等待个人中心窗口出现')
+                            random_wait()
+                            continue
+                    end_time = time.time()
+                    elapsed_time = (end_time - start_time) * 1000  # 计算运行时间（毫秒）
+                    print(f"错误投递关闭完成，{XPATH_in}代码运行了{elapsed_time:.2f}毫秒")
+                    break
+                else:
+                    print('点击事件可能出错，请手动重置')
+                    loop_count =1
+                    continue
+
+
+
 
 def company_black_list(company_name,company_black_list_fr=company_black_list_fr):   #公司黑名单
     for i in company_black_list_fr: #判断公司是否在黑名单中
@@ -194,6 +235,8 @@ while count_num < 101:  #每天投递上限100个
 
         company_name = driver.find_element(By.XPATH, f'//li[@ka="search_list_{count_company}"]/div[1]/div/div[2]/h3/a').text   #读取公司名
         print('第{0}个公司是{1}'.format(count_company, company_name))
+        if count_company == 29 or count_company == 30:  #第1页最后两个经常识别不出，先跳过
+            continue
         if company_black_list(company_name):    #判断公司是否在黑名单中
             continue
         else:    
