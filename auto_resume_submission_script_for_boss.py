@@ -3,10 +3,12 @@ all_start_time = time.time()
 
 #=====================单值类修改内容=====================
 hot_city_list = ['全国','北京','上海','广州','深圳','杭州','天津','西安','苏州','武汉','厦门','长沙','成都','郑州','重庆','佛山','合肥','济南','青岛','南京','东莞','昆明','南昌','石家庄','宁波','福州']   #热门城市列表,不要改
-city_choice = '杭州'    #选择意向城市
+city_choice = '全国'    #选择意向城市
 job_n = 'python'  #选择意向职位
-sal_dic = {'3k-': 402,'3k-5k': 403,'5-10k': 404, '10-20k': 405, '20-50k': 406, '50k+': 407} #薪资对应字典,不要改
-sal = sal_dic['10-20k'] #选择薪资范围
+sal_dic = {'3k-': 402,'3k-5k': 403,'5-10k': 404, '10-20k': 405, '20-50k': 406, '50k+': 407, '不限':000} #薪资对应字典,不要改
+sal = sal_dic['不限'] #选择薪资范围
+low_sal = 6  #最低薪资要求,以千为单位
+high_sal = 18  #最高薪资要求,以千为单位
 
 #=====================多值类修改内容=====================
 
@@ -34,13 +36,14 @@ from urllib import parse
 import json
 from pypinyin import lazy_pinyin
 import sys
+import re
 
 
 #=====================主要代码=====================
 
 def random_wait():  #随机等待时间
     #随机等待时间
-    wait_time = random.randint(1, 3)
+    wait_time = random.randint(0, 2)
     time.sleep(wait_time)
 
 def chrome_setup(): #设置浏览器属性
@@ -145,14 +148,25 @@ def xpath_wait_longer(XPATH_in, timeout=6,type_in='located'): #循环等待元�
                     window_count = len(driver.window_handles)
                     click = driver.find_element(By.XPATH, '//a[@class="default-btn sure-btn"]')
                     click.click
+                    try_self_cont = 0
+                    try_click_cont = 0
                     while True:
                         if handles_check(window_count):
                             print('已关闭个人中心窗口')
                             break
                         else:
                             print('等待个人中心窗口出现')
-                            random_wait()
-                            continue
+                            if xpath_wait('//a[@class="default-btn sure-btn"]',type_in='clickable'):
+                                try_click_cont += 1
+                                print('按钮可点击,尝试点击,尝试第',try_click_cont,'次')
+                                scroll_to_element(driver, '//a[@class="default-btn sure-btn"]')
+                                click = driver.find_element(By.XPATH, '//a[@class="default-btn sure-btn"]')
+                                click.click
+                                continue
+                            else:
+                                try_self_cont += 1
+                                print('等待个人中心窗口出现失败，尝试次数：',try_self_cont)
+                                continue
                     end_time = time.time()
                     elapsed_time = (end_time - start_time) * 1000  # 计算运行时间（毫秒）
                     print(f"错误投递关闭完成，{XPATH_in}代码运行了{elapsed_time:.2f}毫秒")
@@ -209,6 +223,17 @@ def handles_check(previous_window_count):   #误点击打开新页面解决方�
         return True
     else:
         return False
+    
+def extract_salary_range(salary_str):
+    pattern = r'(\d+)-(\d+)K'
+    match = re.search(pattern, salary_str)
+    if match:
+        lower_bound = int(match.group(1))
+        upper_bound = int(match.group(2))
+        return lower_bound, upper_bound
+    else:
+        return None
+
 
 if city_choice in hot_city_list:
     city = get_hotcitycodes_dict(city_choice)
@@ -217,7 +242,10 @@ else:
 query = parse.quote(job_n)
 
 driver = chrome_setup()
-driver.get(f'https://www.zhipin.com/web/geek/job?query={query}&city={city}&salary={sal}')
+if sal == 000:
+    driver.get(f'https://www.zhipin.com/web/geek/job?query={query}&city={city}')
+else:
+    driver.get(f'https://www.zhipin.com/web/geek/job?query={query}&city={city}&salary={sal}')
 print('开始获取职位信息')
 xpath_wait_longer('//div[@class="search-job-result"]')
 
@@ -231,34 +259,68 @@ page_count = 1
 while count_num < 101:  #每天投递上限100个
     for i in range(1,31):  #遍历点击职位列表
         count_company += 1
-        xpath_wait_longer(f'//li[@ka="search_list_{count_company}"]/div[1]/div/div[2]/h3/a')
-
+        temp_count = 0
+        while temp_count<3:
+            try:
+                if xpath_wait(f'//li[@ka="search_list_{count_company}"]/div[1]/div/div[2]/h3/a'):
+                    print('已找到//li[@ka="search_list_{count_company}"]/div[1]/div/div[2]/h3/a')
+                    break
+                else:
+                    temp_count += 1
+                    print('无法获取职位信息，尝试重新获取,temp_count={0}'.format(temp_count))
+                    continue
+            except:
+                temp_count += 1
+                print('无法获取职位信息，尝试重新获取,temp_count={0}'.format(temp_count))
+                continue
+        if temp_count >= 3:
+            print('职位{0}无法获取,跳过'.format(f'//li[@ka="search_list_{count_company}"]/div[1]/div/div[2]/h3/a'))
+            continue
         company_name = driver.find_element(By.XPATH, f'//li[@ka="search_list_{count_company}"]/div[1]/div/div[2]/h3/a').text   #读取公司名
         print('第{0}个公司是{1}'.format(count_company, company_name))
-        if count_company == 29 or count_company == 30:  #第1页最后两个经常识别不出，先跳过
+        if count_company%30 == 0 or (count_company+1)%30 == 0 or (count_company+2)%30 == 0:  #最后三个经常识别不出，先跳过
             continue
         if company_black_list(company_name):    #判断公司是否在黑名单中
+            print('公司{0}在黑名单中,跳过'.format(company_name))
+            random_wait()
             continue
         else:    
             job_name = driver.find_element(By.XPATH, f'//li[@ka="search_list_{count_company}"]/div[1]/a/div/span[1]')
             print('job_name={0}'.format(job_name.text))
 
             if jobname_black_list(job_name.text):    #判断职位是否在黑名单中
+                print('职位{0}在黑名单中,跳过'.format(job_name.text))
+                random_wait()
+                continue
+
+            job_sal = driver.find_element(By.XPATH, f'//li[@ka="search_list_{count_company}"]/div[1]/a/div[2]/span').text
+            print('job_sal={0}'.format(job_sal))
+            result = extract_salary_range(job_sal)
+            if result:
+                lower_bound, upper_bound = result
+                print('薪资范围是{0}到{1}'.format(lower_bound, upper_bound))
+            else:
+                print('无法识别数字格式的薪资范围,跳过')
+                continue
+            if upper_bound > high_sal or lower_bound < low_sal:
+                print('薪资范围不在指定范围内,跳过')
+                random_wait()
                 continue
 
             try_count = 0
             while True: #由于模拟鼠标的不稳定性，读取职务详细信息将进行多次尝试
-                if try_count > 5:
-                    print('尝试次数过5,退出info查找,跳过此职务')
+                if try_count > 3:
+                    print('尝试次数过3,退出info查找,跳过此职务')
                     break
                 try_count += 1
+                print('职位info查询尝试次数{0}'.format(try_count))
                 scroll_to_element(driver, f'//li[@ka="search_list_{count_company}"]')
                 ActionChains(driver).move_to_element(job_name).perform()
                 if xpath_wait('//div[@class="job-detail-card"]',3):
                     break  # 如果成功找到元素,跳出循环
                 else:
                     continue
-            if try_count > 5:
+            if try_count > 3:
                 continue
 
             job_detail = driver.find_element(By.XPATH, '//div[@class="job-detail-card"]')   #读取职位详细信息
@@ -270,6 +332,8 @@ while count_num < 101:  #每天投递上限100个
             previous_window_count = len(driver.window_handles)  # 记录点击前的窗口句柄数量，防止误点击打开新窗口
 
             if jobinfo_black_list(job_info):
+                print('职位{0}的详细信息在黑名单中,跳过'.format(job_name.text))
+                random_wait()
                 continue 
             else:
                 error = 0
@@ -283,7 +347,7 @@ while count_num < 101:  #每天投递上限100个
                         job_list = driver.find_element(By.XPATH, f"//li[@ka='search_list_{count_company}']/div[1]/a/div[2]/a") #定位到hr
                         print('butten_text={0}'.format(job_list.text))
                         #random_wait()
-                        xpath_wait(f"//li[@ka='search_list_{count_company}']/div[1]/a/div[2]/a", timeout=6,type_in='clickable')
+                        xpath_wait(f"//li[@ka='search_list_{count_company}']/div[1]/a/div[2]/a", timeout=3,type_in='clickable')
                         job_list.click()    #点击立即沟通
 
                         if handles_check(previous_window_count):
@@ -300,7 +364,7 @@ while count_num < 101:  #每天投递上限100个
                             job_l2 = driver.find_element(By.XPATH, f"//li[@ka='search_list_{count_company}']/div[1]/a/div[2]/div")
                             print('butten_text={0}'.format(job_list.text))
                             #random_wait()
-                            xpath_wait(f"//li[@ka='search_list_{count_company}']/div[1]/a/div[2]/div", timeout=6,type_in='clickable')
+                            xpath_wait(f"//li[@ka='search_list_{count_company}']/div[1]/a/div[2]/div", timeout=3,type_in='clickable')
                             job_l2.click()
 
                             if handles_check(previous_window_count):
@@ -327,11 +391,12 @@ while count_num < 101:  #每天投递上限100个
         while True: #翻页功能实现，有时不稳定
             try:
                 if xpath_wait('//i[@class="ui-icon-arrow-right"]', timeout=10,type_in='clickable'):
+                    scroll_to_element(driver, '//i[@class="ui-icon-arrow-right"]')
                     next_page = driver.find_element(By.XPATH, '//i[@class="ui-icon-arrow-right"]')    #点击下一页
                     next_page.click()
                     test_count = 0
                     while True:
-                        if xpath_wait(f'//a[@ka="search_list_company_{count_company+1}_custompage"]',30):
+                        if xpath_wait(f'//a[@ka="search_list_company_{count_company+1}_custompage"]',40):
                             page_count += 1
                             print('翻到第{0}页'.format(page_count))
                             break
@@ -339,7 +404,7 @@ while count_num < 101:  #每天投递上限100个
                             test_count += 1
                             scroll_to_element(driver, '//i[@class="ui-icon-arrow-right"]')
                             next_page = driver.find_element(By.XPATH, '//i[@class="ui-icon-arrow-right"]')
-                            print('翻页失败，正在尝试第{0}次，次数过多可手动重新运行'.format(test_count))
+                            print('翻第{0}页失败，正在尝试第{1}次，次数过多可手动重新运行'.format(page_count+1,test_count))
                             next_page.click()
                     break
                 else:
