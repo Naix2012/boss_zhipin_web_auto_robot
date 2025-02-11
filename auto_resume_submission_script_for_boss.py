@@ -3,29 +3,30 @@ all_start_time = time.time()
 
 #=====================单值类修改内容=====================
 hot_city_list = ['全国','北京','上海','广州','深圳','杭州','天津','西安','苏州','武汉','厦门','长沙','成都','郑州','重庆','佛山','合肥','济南','青岛','南京','东莞','昆明','南昌','石家庄','宁波','福州']   #热门城市列表,不要改
-city_choice = '全国'    #选择意向城市
+city_choice = '全国'    #选择意向城市,从上面一行的内容里复制
 job_n = 'python'  #选择意向职位
 sal_dic = {'3k-': 402,'3k-5k': 403,'5-10k': 404, '10-20k': 405, '20-50k': 406, '50k+': 407, '不限':000} #薪资对应字典,不要改
-sal = sal_dic['不限'] #选择薪资范围
+sal = sal_dic['不限'] #选择薪资范围,从上面一行的内容里复制,记得下面两项也要对应改,此项范围是修改网站搜索范围,下面两项是脚本检测过滤
 low_sal = 6  #最低薪资要求,以千为单位
 high_sal = 18  #最高薪资要求,以千为单位
 
 #=====================多值类修改内容=====================
 
 #公司名称黑名单,公司名称包含其中字符串则跳过
-company_black_list_fr = ['输入排除公司名称']
+company_black_list_fr = ['输入排除公司名称','以逗号分隔']
 
 #职位名称黑名单,职位名称包含其中字符串则跳过
-jobname_black_list_fr = ['输入排除职务名称']
+jobname_black_list_fr = ['输入排除职务名称','以逗号分隔']
 
 #职位详细信息黑名单,职位详细信息包含其中字符串则跳过
-jobinfo_black_list_fr = ['输入排除职位详细信息关键词']
+jobinfo_black_list_fr = ['输入排除职位详细信息关键词','以逗号分隔']
 
 #=====================导入库=====================
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
@@ -47,13 +48,25 @@ def random_wait():  #随机等待时间
     time.sleep(wait_time)
 
 def chrome_setup(): #设置浏览器属性
+    # 配置 Chrome 防检测参数
     chrome_options = Options()
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
+
+    # 配置ChromeOptions指定Chrome路径
+    #chrome_options.binary_location = r".\Chrome\Application\chrome.exe"  # 替换为实际路径
+
+    # 创建Service对象指定Chromedriver路径
+    chromedriver_service = Service(executable_path=r".\chromedriver-win64\chromedriver.exe")  # 替换为实际路径
+
     chrome_options.add_experimental_option("detach", True)
 
-    option = webdriver.ChromeOptions()
-    option.add_experimental_option("debuggerAddress", "127.0.0.1:9527")
+    # 用bat文件手动开启
+    #option = webdriver.ChromeOptions()
+    #option.add_experimental_option("debuggerAddress", "127.0.0.1:9527")
     
-    driver = webdriver.Chrome(options=option)   #创建一个新的webdriver实例
+    driver = webdriver.Chrome(service=chromedriver_service, options=chrome_options)   #创建一个新的webdriver实例
     return driver
 
 def get_hotcitycodes_dict(city_name):  #获取城市编码(只有热门城市)
@@ -147,7 +160,7 @@ def xpath_wait_longer(XPATH_in, timeout=6,type_in='located'): #循环等待元�
                         sys.exit()
                     window_count = len(driver.window_handles)
                     click = driver.find_element(By.XPATH, '//a[@class="default-btn sure-btn"]')
-                    click.click
+                    click.click()
                     try_self_cont = 0
                     try_click_cont = 0
                     while True:
@@ -161,7 +174,7 @@ def xpath_wait_longer(XPATH_in, timeout=6,type_in='located'): #循环等待元�
                                 print('按钮可点击,尝试点击,尝试第',try_click_cont,'次')
                                 scroll_to_element(driver, '//a[@class="default-btn sure-btn"]')
                                 click = driver.find_element(By.XPATH, '//a[@class="default-btn sure-btn"]')
-                                click.click
+                                click.click()
                                 continue
                             else:
                                 try_self_cont += 1
@@ -242,6 +255,27 @@ else:
 query = parse.quote(job_n)
 
 driver = chrome_setup()
+driver.get("https://www.zhipin.com")
+
+try:
+    # 点击登录按钮
+    xpath_wait('//*[@id="header"]/div[1]/div[4]/div/a', type_in='clickable')
+    login_btn = driver.find_element(By.XPATH, '//*[@id="header"]/div[1]/div[4]/div/a')
+    login_btn.click()
+
+    # 切换扫码登录
+    xpath_wait('//*[@id="wrap"]/div/div[2]/div[2]/div[1]', type_in='clickable')
+    switch_tab = driver.find_element(By.XPATH, '//*[@id="wrap"]/div/div[2]/div[2]/div[1]')
+    switch_tab.click()
+
+    # 等待扫码完成
+    wait = WebDriverWait(driver, 60)
+    wait.until(EC.presence_of_element_located((By.XPATH, '//*[@id="header"]/div[1]/div[1]/a')))
+    print("登录成功！")
+
+except Exception as e:
+    print(f"操作失败: {str(e)}")
+
 if sal == 000:
     driver.get(f'https://www.zhipin.com/web/geek/job?query={query}&city={city}')
 else:
