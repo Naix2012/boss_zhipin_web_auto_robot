@@ -48,7 +48,7 @@ def random_wait():  #随机等待时间
     time.sleep(wait_time)
 
 def chrome_setup(): #设置浏览器属性
-    # 配置 Chrome 防检测参数
+    # 配置 Chrome 参数
     chrome_options = Options()
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
