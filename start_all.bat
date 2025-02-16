@@ -4,128 +4,66 @@ setlocal enabledelayedexpansion
 REM 配置参数
 set "PROJECT_DIR=%~dp0"
 set "PYTHON_VERSION=3.11.9"
-set "PYTHON_DIR=%PROJECT_DIR%python"
-set "PYTHON_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/python-%PYTHON_VERSION%-embed-amd64.zip"
+set "VENV_DIR=%PROJECT_DIR%.venv"
 set "REQUIREMENTS=%PROJECT_DIR%requirements.txt"
+set "PYTHON_INSTALL_DIR=%PROJECT_DIR%Python%PYTHON_VERSION%"
+set "PYTHON_EXE="
+set "MAIN_SCRIPT=%PROJECT_DIR%auto_resume_submission_script_for_boss.py"
 set "CHROMEDRIVER_DIR=%PROJECT_DIR%/chromedriver-win64"
 
-REM 检查本地Python环境
-if not exist "%PYTHON_DIR%\python.exe" (
-    echo Deploying isolated Python environment...
-    
-    REM 创建并进入工作目录
-    if not exist "%PYTHON_DIR%" mkdir "%PYTHON_DIR%"
-    cd /d "%PYTHON_DIR%"
-    
-    REM 下载嵌入式Python
-    echo Download Python Embedded Version...
-    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile '%PYTHON_DIR%\python.zip' -ErrorAction Stop } catch { Write-Error $_; exit 1 }"
-    if errorlevel 1 (
-        echo Error: Python download failed
-        pause
-        exit /b 1
-    )
-
-    REM 验证下载文件完整性
-    if not exist "%PYTHON_DIR%\python.zip" (
-        echo Error: Python ZIP file not found after download
-        pause
-        exit /b 1
-    )
-    
-    REM 解压文件
-    echo Extract files...
-    powershell -Command "try { Expand-Archive -Path '%PYTHON_DIR%\python.zip' -DestinationPath '%PYTHON_DIR%' -Force } catch { Write-Error $_; exit 1 }"
-    if errorlevel 1 (
-        echo Error: Failed to extract Python ZIP
-        echo Possible reasons: Corrupted download or invalid ZIP format
-        pause
-        exit /b 1
-    )
-    del /q "%PYTHON_DIR%\python.zip" 2>nul
-    
-    REM 配置运行环境
-    echo Configure Python environment...
-    copy "python._pth" "python._pth.bak" >nul
-    (
-        echo python311.zip
-        echo .
-        echo Lib\site-packages
-        echo import site
-    ) > "python._pth"
-    
-    REM 安装包管理器（示例：添加错误处理）
-    echo Initialize pip,It may take a long time...
-    curl -sSL -o get-pip.py https://bootstrap.pypa.io/get-pip.py
-    if errorlevel 1 (
-        echo Error: Failed to download get-pip.py
-        pause
-        exit /b 1
-    )
-    python.exe get-pip.py --no-warn-script-location
-    if errorlevel 1 (
-        echo Error: pip installation failed
-        pause
-        exit /b 1
+REM 检查系统PATH中的Python是否可用
+python --version >nul 2>&1
+if not errorlevel 1 (
+    echo [INFO] Found Python in system PATH.
+    for /f "delims=" %%P in ('where python') do (
+        set "SYSTEM_PYTHON=%%P"
+        goto :check_venv
     )
 )
 
-REM 修改python._pth文件
-set "file=%PYTHON_DIR%\python311._pth"
-
-:: 检查文件是否存在
-if not exist "%file%" (
-    echo The file '%file%' does not exist!
-    pause
-    exit /b
+:check_venv
+REM 检查虚拟环境是否存在
+if exist "%VENV_DIR%\pyvenv.cfg" (
+    echo [INFO] Virtual environment already exists at: %VENV_DIR%
+    goto :install_dependencies
 )
 
-:: 创建一个临时文件
-set "tempFile=%temp%\temp_pth.txt"
-
-:: 初始化标志变量，标记是否已修改
-set modified=false
-
-:: 逐行读取文件，修改最后一行
-for /f "delims=" %%A in (%file%) do (
-    set line=%%A
-    if "!line!"=="#import site" (
-        echo import site >> %tempFile%
-        set modified=true
-    ) else (
-        echo !line! >> %tempFile%
-    )
-)
-
-:: 如果文件末尾的 "#import site" 已被修改
-if !modified! == true (
-    echo The file has been modified.
-    move /y %tempFile% %file%
+REM 创建虚拟环境
+echo [INFO] Creating virtual environment...
+if defined SYSTEM_PYTHON (
+    "%SYSTEM_PYTHON%" -m venv "%VENV_DIR%"
+) else if exist "%PYTHON_INSTALL_DIR%\python.exe" (
+    "%PYTHON_INSTALL_DIR%\python.exe" -m venv "%VENV_DIR%"
 ) else (
-    echo The '# import site' was not found in the file or the file has not been modified.
-    del %tempFile%
+    echo [ERROR] No valid Python found for venv creation
+    exit /b 1
 )
-
-REM 设置临时环境变量
-set "PATH=%PYTHON_DIR%;%PYTHON_DIR%\Scripts;%PATH%"
-
-REM 安装项目依赖
-if exist "%REQUIREMENTS%" (
-    echo Installing dependency libraries...
-    python -m pip install --upgrade pip --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple
-    python -m pip install -r "%REQUIREMENTS%" --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple
-    if errorlevel 1 (
-        echo Error: Dependency installation failed
-        pause
-        exit /b 1
-    )
-) else (
-    echo Error: Required. txt not found
-    pause
+if errorlevel 1 (
+    echo [ERROR] Failed to create virtual environment
     exit /b 1
 )
 
-REM 检查ChromeDriver
+:install_dependencies
+REM 安装依赖
+echo [INFO] Installing dependencies...
+"%VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip --no-warn-script-location
+if errorlevel 1 (
+    echo [ERROR] Failed to upgrade pip
+    exit /b 1
+)
+
+if exist "%REQUIREMENTS%" (
+    "%VENV_DIR%\Scripts\python.exe" -m pip install -r "%REQUIREMENTS%" --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple
+    if errorlevel 1 (
+        echo [ERROR] Failed to install requirements
+        exit /b 1
+    )
+) else (
+    echo [ERROR] requirements.txt not found
+    exit /b 1
+)
+
+REM 检查ChromeDriver=====================================================================
 
 REM 获取Chrome版本号
 for /f "tokens=3 delims= " %%i in ('reg query "HKEY_CURRENT_USER\Software\Google\Chrome\BLBeacon" /v version') do set chromeVersion=%%i
@@ -171,10 +109,45 @@ if not exist "%CHROMEDRIVER_DIR%\chromedriver.exe" (
 )
     
 
-REM 运行Python主程序
-echo Starting application...
-python "%PROJECT_DIR%\auto_resume_submission_script_for_boss.py"
+REM 启动部分 ==============================================
+if not exist "%MAIN_SCRIPT%" (
+    echo [ERROR] Main script '%MAIN_SCRIPT%' not found
+    pause
+    exit /b 1
+)
 
-endlocal
-pause
+echo [INFO] Starting application...
+"%VENV_DIR%\Scripts\python.exe" "%MAIN_SCRIPT%"
+if errorlevel 1 (
+    echo [ERROR] Application exited with error code !errorlevel!
+    pause
+    exit /b 1
+)
 
+REM ========================================================
+
+echo [SUCCESS] Environment setup and application execution completed
+exit /b 0
+
+:install_python
+REM 下载并安装Python（保持原有安装逻辑不变）
+echo [INFO] Downloading Python %PYTHON_VERSION%...
+set "PYTHON_URL=https://www.python.org/ftp/python/%PYTHON_VERSION%/python-%PYTHON_VERSION%-amd64.exe"
+set "INSTALLER_PATH=%PROJECT_DIR%python_installer.exe"
+
+powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%PYTHON_URL%' -OutFile '%INSTALLER_PATH%'"
+if errorlevel 1 (
+    echo [ERROR] Failed to download Python installer
+    exit /b 1
+)
+
+echo [INFO] Installing Python to %PYTHON_INSTALL_DIR%...
+start /wait "" "%INSTALLER_PATH%" /quiet InstallAllUsers=0 TargetDir="%PYTHON_INSTALL_DIR%" Include_launcher=0 PrependPath=0
+del "%INSTALLER_PATH%"
+
+if not exist "%PYTHON_INSTALL_DIR%\python.exe" (
+    echo [ERROR] Python installation failed
+    exit /b 1
+)
+set "PYTHON_EXE=%PYTHON_INSTALL_DIR%\python.exe"
+goto :check_venv

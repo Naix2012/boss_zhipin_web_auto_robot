@@ -18,20 +18,14 @@ ChromeDriver下载对应版本,解压后将ChromeDriver.exe放在目录chromedri
 启动脚本有自动安装的代码,但是考虑到网络问题最好还是自己下载一下
 
 ## 安装python
-启动脚本会自动安装嵌入版的python3.11.9到目录python下,但是自动下载的流程里pip模块下载的很慢
-建议自己安装一个python3.11,然后从安装目录,一般是C:\Users\用户名\AppData\Local\Programs\Python\Python311里把所有文件复制到项目的python文件夹里
-其他版本的我没试过,不知道会不会有bug
+启动脚本会自动安装python3.11.9到目录python下,但是不确定会不会有问题
+建议自己安装一个python3.11,然后加入系统path
+只要系统path里有python脚本就会自动用系统的创建虚拟环境
 
 # 启动流程
 运行start_all.bat即可,脚本会自动安装依赖,然后自动启动脚本
-你将有60秒时间扫码登录boss直聘账号,然后脚本会自动投递符合筛选条件的简历
-如果弹出验证界面就再手点一下
-运行的时候点的不是太快的话应该不会出问题,每个步骤的随机等待时间可以在auto_resume_submission_script_for_boss.py里代码的random_wait()里修改,45行,目前是0-2s
-
-# 修改筛选条件
-职位薪资之类的在auto_resume_submission_script_for_boss.py里修改筛选条件即可
-主要是最上面的city_choice,job_n,sal,low_sal,high_sal以及后面的三个黑名单,具体可以看#后面的代码注释
-后面可能会试试看做成方便改的ui
+在弹出的ui里修改需要的地址,岗位信息等,改好了建议先点记录当前选项按钮,然后再点开始自动投递
+暂停投递键会等脚本运行到某个节点才能停,没法立刻停止,如果你需要立刻停就点强制中止,不过需要重新扫码
 
 可能会偶尔有点小问题，还在调试中，脚本卡住或者报错就关了重新跑一下，可以把报错提到issue里
 
